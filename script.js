@@ -54,6 +54,9 @@ Bob Johnson,40,bob@example.com`;
       document.getElementById('input-data').value = event.target.result;
       document.querySelector('.file-name').textContent = file.name;
     };
+    reader.onerror = () => {
+      alert('Error reading file');
+    };
     reader.readAsText(file);
   });
   
@@ -87,6 +90,7 @@ Bob Johnson,40,bob@example.com`;
       document.getElementById('output-data').textContent = output;
     } catch (e) {
       alert(`Conversion failed: ${e.message}`);
+      console.error(e);
     }
   });
   
@@ -130,26 +134,28 @@ Bob Johnson,40,bob@example.com`;
     document.getElementById('file-input').value = '';
   });
   
-  // Conversion functions
+  // Improved CSV to JSON conversion
   function csvToJson(csvString, options = { hasHeaders: true }) {
-    const lines = csvString.split('\n').filter(line => line.trim() !== '');
+    // Normalize line endings and split into lines
+    const lines = csvString.replace(/\r\n/g, '\n').split('\n').filter(line => line.trim() !== '');
+    if (lines.length === 0) return '[]';
+    
     const result = [];
     
-    if (options.hasHeaders && lines.length > 0) {
-      const headers = lines[0].split(',').map(h => h.trim());
+    if (options.hasHeaders) {
+      // Handle quoted headers and values
+      const headers = parseCsvLine(lines[0]);
       
       for (let i = 1; i < lines.length; i++) {
         const obj = {};
-        const currentLine = lines[i].split(',');
+        const currentLine = parseCsvLine(lines[i]);
         
         for (let j = 0; j < headers.length; j++) {
-          let value = currentLine[j] ? currentLine[j].trim() : '';
-          // Try to parse numbers and booleans
-          if (!isNaN(value)) value = Number(value);
-          else if (value.toLowerCase() === 'true') value = true;
-          else if (value.toLowerCase() === 'false') value = false;
-          
-          obj[headers[j]] = value;
+          if (j < currentLine.length) {
+            obj[headers[j]] = parseValue(currentLine[j]);
+          } else {
+            obj[headers[j]] = '';
+          }
         }
         
         result.push(obj);
@@ -157,17 +163,52 @@ Bob Johnson,40,bob@example.com`;
     } else {
       // Handle CSV without headers
       for (let i = 0; i < lines.length; i++) {
-        result.push(lines[i].split(',').map(item => {
-          let value = item.trim();
-          if (!isNaN(value)) value = Number(value);
-          return value;
-        });
+        result.push(parseCsvLine(lines[i]).map(parseValue));
       }
     }
     
     return JSON.stringify(result, null, 2);
   }
   
+  // Helper to parse a single CSV line with quoted values
+  function parseCsvLine(line) {
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          // Escaped quote
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    values.push(current);
+    return values.map(v => v.trim());
+  }
+  
+  // Helper to parse values (numbers, booleans, etc.)
+  function parseValue(value) {
+    if (value === '') return '';
+    if (!isNaN(value)) return Number(value);
+    if (value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'false') return false;
+    return value;
+  }
+  
+  // Improved JSON to CSV conversion
   function jsonToCsv(jsonString, options = { flatten: true }) {
     try {
       const jsonData = JSON.parse(jsonString);
@@ -181,7 +222,7 @@ Bob Johnson,40,bob@example.com`;
           ? getFlattenedKeys(jsonData[0]) 
           : Object.keys(jsonData[0]);
         
-        csv += headers.join(',') + '\n';
+        csv += headers.map(escapeCsvValue).join(',') + '\n';
         
         // Add rows
         jsonData.forEach(item => {
@@ -189,16 +230,26 @@ Bob Johnson,40,bob@example.com`;
             const value = options.flatten
               ? getFlattenedValue(item, header)
               : item[header];
-            return JSON.stringify(value);
+            return escapeCsvValue(value);
           });
           csv += row.join(',') + '\n';
         });
-      } else {
+      } else if (typeof jsonData === 'object') {
         // Handle single object
-        const headers = Object.keys(jsonData);
-        csv += headers.join(',') + '\n';
-        const row = headers.map(header => JSON.stringify(jsonData[header]));
+        const headers = options.flatten 
+          ? getFlattenedKeys(jsonData) 
+          : Object.keys(jsonData);
+        
+        csv += headers.map(escapeCsvValue).join(',') + '\n';
+        const row = headers.map(header => {
+          const value = options.flatten
+            ? getFlattenedValue(jsonData, header)
+            : jsonData[header];
+          return escapeCsvValue(value);
+        });
         csv += row.join(',');
+      } else {
+        throw new Error('Input must be a JSON object or array');
       }
       
       return csv;
@@ -207,14 +258,27 @@ Bob Johnson,40,bob@example.com`;
     }
   }
   
+  // Escape CSV values
+  function escapeCsvValue(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  }
+  
   // Helper functions for nested objects
   function getFlattenedKeys(obj, prefix = '') {
+    if (typeof obj !== 'object' || obj === null) return [prefix];
+    
     let keys = [];
     for (const key in obj) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
       if (typeof obj[key] === 'object' && obj[key] !== null) {
-        keys = keys.concat(getFlattenedKeys(obj[key], `${prefix}${key}.`));
+        keys = keys.concat(getFlattenedKeys(obj[key], fullKey));
       } else {
-        keys.push(`${prefix}${key}`);
+        keys.push(fullKey);
       }
     }
     return keys;
@@ -224,6 +288,7 @@ Bob Johnson,40,bob@example.com`;
     const parts = key.split('.');
     let value = obj;
     for (const part of parts) {
+      if (value === null || typeof value !== 'object') return undefined;
       value = value[part];
       if (value === undefined) break;
     }
