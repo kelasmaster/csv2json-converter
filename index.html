@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV ↔ JSON Converter</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="converter-app">
+    <header class="app-header">
+      <h1>CSV ↔ JSON Converter</h1>
+    </header>
+    
+    <main class="converter-container">
+      <div class="format-selector">
+        <button class="format-btn active" data-format="csv-to-json">
+          CSV to JSON
+        </button>
+        <button class="format-btn" data-format="json-to-csv">
+          JSON to CSV
+        </button>
+      </div>
+      
+      <div class="input-area">
+        <div class="input-options">
+          <div class="file-upload">
+            <input type="file" id="file-input" accept=".csv,.json">
+            <label for="file-input">Choose File</label>
+            <span class="file-name">No file selected</span>
+          </div>
+          <button class="sample-btn">Load Sample</button>
+        </div>
+        
+        <div class="input-editor">
+          <textarea id="input-data" placeholder="Paste your CSV data here..."></textarea>
+        </div>
+        
+        <div class="conversion-options">
+          <div class="csv-options" data-visible="csv-to-json">
+            <label>
+              <input type="checkbox" id="header-row" checked> First row contains headers
+            </label>
+          </div>
+          <div class="json-options" data-visible="json-to-csv" style="display: none;">
+            <label>
+              <input type="checkbox" id="flatten-nested"> Flatten nested objects
+            </label>
+          </div>
+        </div>
+        
+        <button class="convert-btn">Convert</button>
+      </div>
+      
+      <div class="output-area">
+        <div class="output-header">
+          <h3>Result</h3>
+          <div class="output-actions">
+            <button class="copy-btn">Copy</button>
+            <button class="download-btn">Download</button>
+            <button class="clear-btn">Clear</button>
+          </div>
+        </div>
+        
+        <div class="output-display">
+          <pre id="output-data"><code>Your converted data will appear here...</code></pre>
+        </div>
+      </div>
+    </main>
+    
+    <footer class="app-footer">
+      <p>CSV ↔ JSON Converter Tool | Free to use</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
